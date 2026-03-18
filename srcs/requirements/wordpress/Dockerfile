@@ -13,6 +13,9 @@ RUN wget https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.ph
 RUN chmod +x wp-cli.phar
 RUN mv wp-cli.phar /usr/local/bin/wp
 
+# This searches for 'listen = /run/php/php7.4-fpm.sock' and replaces it with '9000'
+RUN sed -i 's/listen = \/run\/php\/php7.4-fpm.sock/listen = 9000/g' /etc/php/7.4/fpm/pool.d/www.conf
+
 RUN mkdir -p /run/php && chown www-data:www-data /run/php
 
 COPY conf/auto_config.sh /usr/local/bin/

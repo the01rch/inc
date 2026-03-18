@@ -6,7 +6,7 @@
 #    By: redrouic <redrouic@student.42.fr>          +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2026/03/16 09:16:28 by redrouic          #+#    #+#              #
-#    Updated: 2026/03/18 14:30:29 by redrouic         ###   ########.fr        #
+#    Updated: 2026/03/18 15:33:44 by redrouic         ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -32,7 +32,7 @@ clean: down
 
 fclean: clean
 	docker-compose -f ./srcs/docker-compose.yml down -v
-	@rm -rf $(PATH_DATA)
+	@sudo rm -rf $(PATH_DATA)
 	docker system prune -af
 
 re: fclean all
