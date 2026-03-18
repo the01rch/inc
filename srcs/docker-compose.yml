@@ -1,6 +1,6 @@
 services:
   mariadb:
-    image: my_mariadb_image
+    image: mariadb
     container_name: my_mariadb_container
     build:
       context: ./requirements/mariadb
@@ -21,26 +21,25 @@ services:
     restart: unless-stopped
 
   wordpress:
-    image: my_wordpress_image
+    image: wordpress
     container_name: my_wordpress_container
     build:
       context: ./requirements/wordpress
       dockerfile: Dockerfile
     depends_on:
       mariadb:
-        condition: service_healthy
+        condition: service_healthy   #testss
     volumes:
       - wordpress_volume:/var/www/html/
     env_file: .env
     expose:
       - "9000"
     networks:
-      # - inception_backend
       - inception_frontend
     restart: unless-stopped
 
   nginx:
-    image: my_nginx_image
+    image: nginx
     container_name: my_nginx_container
     build:
       context: ./requirements/nginx

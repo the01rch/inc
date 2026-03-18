@@ -1,0 +1,9 @@
+# Environment variables - NEVER commit these
+srcs/.env
+.env
+
+# Data directories
+/home/redrouic/data/
+
+# Docker generated files
+*.log
