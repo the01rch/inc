@@ -3,64 +3,68 @@
 set -e 
 
 if [ -d "/var/lib/mysql/$MYSQL_DATABASE" ]; then
-	echo "MARIADB Already installed"
-	mysqld_safe
+    echo "MARIADB Already installed"
+    exec mysqld_safe
 else 
-	chown -R mysql:mysql /var/lib/mysql
-	mkdir -p /var/run/mysqld
-	chown mysql:mysql /var/run/mysqld
-	chmod 777 /var/run/mysqld
-	
-	# Try to connect [max_attempts_connection] before to message error and stop 
-	try_connection=0;
-	max_attempts_connection=4;
-	service mariadb start
-	until mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "" ; do
-		try_connection=$((try_connection + 1))
-		if [ "$try_connection" -ge "$max_attempts_connection" ] ; then
-			echo "Enable to connect MariaDB root. Make sure have the right password. The issues could also due to a bad container setting, check if listening port is available and if setting files are correctly shared. If everythings are correct, you can try to increse [max_attempts_connection] (l.10) in ./mariadb/conf/init.sh file"
-			exit 1
-		fi
-		sleep 7
-	done
-	
-	# Create data base with user root
-	mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\`;"
-	
-	# Create admin user and guest using docker secret files
-	if mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "CREATE USER \`${ADMIN_USER}\` @'%' IDENTIFIED BY '${ADMIN_PASSWORD}';" ; then
-		echo "User ${ADMIN_USER} successfully created."
-	else
-		echo "${ADMIN_USER} user couldnt be created."
-		exit 1
-	fi
-	if mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO \`${ADMIN_USER}\`@'%' IDENTIFIED BY '${ADMIN_PASSWORD}';" ; then
-		echo "\`${ADMIN_USER}\` privileges changed."
-	else 
-		echo "\`${ADMIN_USER}\` privileges couldn't be changed."
-		exit 1
-	fi
-	
-	if mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "CREATE USER \`${USER1_LOGIN}\` @'%' IDENTIFIED BY \"${USER1_PASSWORD}\";" ; then
-		echo "User ${USER1_LOGIN} succesfully created."
-	else
-		echo "${USER1_LOGIN} user couldnt be created."
-		exit 1
-	fi
-	if mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "GRANT SELECT ON \`${MYSQL_DATABASE}\`.* TO \`${USER1_LOGIN}\`@'%' IDENTIFIED BY '${USER1_PASSWORD}';" ; then
-		echo "\`${USER1_LOGIN}\` privileges changed."
-	else 
-		echo "\`${USER1_LOGIN}\` privileges couldn't be changed."
-		exit 1
-	fi
-	sleep 5
-	
-	mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';"
-	mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "FLUSH PRIVILEGES;"
-	sleep 5
-	mysqladmin -u root -p"$MYSQL_ROOT_PASSWORD" shutdown
-	
-	touch /tmp/mariadb_ready
-	exec mysqld_safe
-	
+    chown -R mysql:mysql /var/lib/mysql
+    mkdir -p /var/run/mysqld
+    chown mysql:mysql /var/run/mysqld
+    chmod 777 /var/run/mysqld
+    
+    # Start service to configure it
+    service mariadb start
+    
+    # Check if root password is already set or not
+    try_connection=0;
+    max_attempts_connection=10; # Increased for safety
+    
+    until mysql -u root -e "SELECT 1;" >/dev/null 2>&1 || mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "SELECT 1;" >/dev/null 2>&1; do
+        try_connection=$((try_connection + 1))
+        if [ "$try_connection" -ge "$max_attempts_connection" ] ; then
+            echo "Unable to connect MariaDB root."
+            exit 1
+        fi
+        echo "Waiting for MariaDB... ($try_connection/$max_attempts_connection)"
+        sleep 3
+    done
+    
+    # Define a variable to use the correct password flag for the following commands
+    # If root without password works, use empty. If not, use the env password.
+    if mysql -u root -e "SELECT 1;" >/dev/null 2>&1; then
+        DB_AUTH="-u root"
+    else
+        DB_AUTH="-u root -p$MYSQL_ROOT_PASSWORD"
+    fi
+
+    # Create data base
+    mysql $DB_AUTH -e "CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\`;"
+    
+    # Create admin user (using IF NOT EXISTS to avoid Error 1396)
+    if mysql $DB_AUTH -e "CREATE USER IF NOT EXISTS \`${ADMIN_USER}\`@'%' IDENTIFIED BY '${ADMIN_PASSWORD}';" ; then
+        mysql $DB_AUTH -e "GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO \`${ADMIN_USER}\`@'%';"
+        echo "User ${ADMIN_USER} successfully created/verified."
+    else
+        echo "${ADMIN_USER} user couldnt be created."
+        exit 1
+    fi
+    
+    # Create second user
+    if mysql $DB_AUTH -e "CREATE USER IF NOT EXISTS \`${USER1_LOGIN}\`@'%' IDENTIFIED BY '${USER1_PASSWORD}';" ; then
+        mysql $DB_AUTH -e "GRANT SELECT ON \`${MYSQL_DATABASE}\`.* TO \`${USER1_LOGIN}\`@'%';"
+        echo "User ${USER1_LOGIN} successfully created/verified."
+    else
+        echo "${USER1_LOGIN} user couldnt be created."
+        exit 1
+    fi
+    
+    # Set the root password last, otherwise you lock yourself out mid-script
+    mysql $DB_AUTH -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';"
+    mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "FLUSH PRIVILEGES;"
+    
+    # Shutdown properly to restart with mysqld_safe as PID 1
+    mysqladmin -u root -p"$MYSQL_ROOT_PASSWORD" shutdown
+    
+    echo "MariaDB setup finished."
+    touch /tmp/mariadb_ready
+    exec mysqld_safe
 fi
