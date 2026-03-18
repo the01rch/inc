@@ -27,7 +27,7 @@ services:
       context: ./requirements/wordpress
       dockerfile: Dockerfile
     depends_on:
-      mariadb:
+      - mariadb
         #condition: service_healthy
     volumes:
       - wordpress_volume:/var/www/html/
