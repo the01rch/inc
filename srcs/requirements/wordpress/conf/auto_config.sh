@@ -1,16 +1,15 @@
 #!/bin/bash
 
-# Attendre que MariaDB soit prête avant de lancer les commandes WP-CLI
-# On utilise mariadb-admin ping au lieu d'une boucle infinie (prohibée par le sujet)
+# Wait for MariaDB to be ready (Dynamic check)
 echo "Waiting for MariaDB..."
 while ! mariadb-admin ping -h"mariadb" --silent; do
     sleep 1
 done
-echo "MariaDB is up and running!"
+echo "MariaDB is up!"
 
 set -x
 
-# 1. Download WordPress if it's not already there
+# 1. Download WordPress
 if [ ! -d "/var/www/html/wordpress" ]; then
     mkdir -p /var/www/html
     cd /var/www/html
@@ -21,10 +20,9 @@ fi
 
 cd /var/www/html/wordpress
 
-# 2. Configure and Install WordPress
-# We check for wp-config.php existence to ensure persistence works after reboot 
+# 2. Configure and Install
 if [ ! -f "wp-config.php" ]; then
-    # Create wp-config.php using variables from .env 
+    # Create config (Matches the MYSQL_USER from init.sh)
     wp config create --allow-root \
                      --dbname="${MYSQL_DATABASE}" \
                      --dbuser="${MYSQL_USER}" \
@@ -32,7 +30,7 @@ if [ ! -f "wp-config.php" ]; then
                      --dbhost=mariadb:3306 \
                      --path='/var/www/html/wordpress'
     
-    # Install WordPress Core
+    # Install WordPress
     wp core install --allow-root \
                     --url="${DOMAIN_NAME}" \
                     --title="Inception" \
@@ -41,7 +39,7 @@ if [ ! -f "wp-config.php" ]; then
                     --admin_email="${WP_ADMIN_EMAIL}" \
                     --path='/var/www/html/wordpress'
 
-    # Create the second user (Mandatory part: two users required) 
+    # Create the second mandatory user
     wp user create --allow-root \
                     "second_user" "second_user@example.com" \
                     --role=author \
@@ -51,13 +49,11 @@ else
     echo "WordPress already configured."
 fi
 
-# 3. Final Permissions fix
+# 3. Permissions
 chown -R www-data:www-data /var/www/html/wordpress
 chmod -R 755 /var/www/html/wordpress
 
-# 4. START SERVICE
-# We use 'exec' to replace the shell process with PHP-FPM. 
-# This makes PHP-FPM the PID 1 of the container[cite: 105].
+# 4. Start PHP-FPM in foreground (MANDATORY PID 1)
 echo "Starting PHP-FPM..."
 mkdir -p /run/php
 exec /usr/sbin/php-fpm7.4 -F
