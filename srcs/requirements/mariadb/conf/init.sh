@@ -26,8 +26,8 @@ else
     # 2. Create the Database
     mysql $DB_AUTH -e "CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\`;"
     
-    # 3. Create the WordPress User (MUST match MYSQL_USER in auto_config.sh)
-    # We use @'%' so it can be accessed from the WordPress container
+    # 3. Create the WordPress User (The fix for Error 1130)
+    # Using @'%' allows the WordPress container to connect to MariaDB
     mysql $DB_AUTH -e "CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'%' IDENTIFIED BY '${MYSQL_PASSWORD}';"
     mysql $DB_AUTH -e "GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_USER}'@'%';"
     
