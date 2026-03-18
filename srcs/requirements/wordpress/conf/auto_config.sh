@@ -1,43 +1,51 @@
 #!/bin/bash
 
 sleep 10
-set -e
+# We remove set -e for a moment to handle existing files gracefully
 set -x
 
-if [ ! -f '/var/www/html/wordpress/wp-config.php' ]; then
+#  Download WordPress if the folder doesn't exist
+if [ ! -d "/var/www/html/wordpress" ]; then
+    mkdir -p /var/www/html
     cd /var/www/html
     wget -q https://fr.wordpress.org/wordpress-6.6-fr_FR.tar.gz 
     tar -xzf wordpress-6.6-fr_FR.tar.gz
     rm wordpress-6.6-fr_FR.tar.gz
-    chown -R www-data:www-data wordpress
+    chown -R www-data:www-data /var/www/html/wordpress
 fi
 
 cd /var/www/html/wordpress
-if ! wp core is-installed --allow-root --path='/var/www/html/wordpress' > /dev/null 2>&1; then
-wp config create --allow-root --dbname="${MYSQL_DATABASE}" \
-                     --dbuser="${ADMIN_USER}" \
-                     --dbpass="${ADMIN_PASSWORD}" \
+
+#  Check if wp-config already exists before trying to create it
+if [ ! -f "wp-config.php" ]; then
+    wp config create --allow-root \
+                     --dbname="${MYSQL_DATABASE}" \
+                     --dbuser="${SQL_USER}" \
+                     --dbpass="${SQL_PASSWORD}" \
                      --dbhost=mariadb:3306 \
-                     --path='/var/www/html/wordpress';
-chown www-data:www-data /var/www/html/wordpress/wp-config.php
-
-
+                     --path='/var/www/html/wordpress'
+    
     wp core install --allow-root \
                     --url="${DOMAIN_NAME}" \
                     --title="${SITE_TITLE}" \
                     --admin_user="${ADMIN_USER}" \
                     --admin_password="${ADMIN_PASSWORD}" \
-                    --path='/var/www/html/wordpress' \
-                    --admin_email="${ADMIN_MAIL}";
+                    --admin_email="${ADMIN_MAIL}" \
+                    --path='/var/www/html/wordpress'
 
     wp user create  --allow-root \
-                    ${USER1_LOGIN} ${USER1_MAIL} \
+                    "${USER1_LOGIN}" "${USER1_MAIL}" \
                     --role=author \
-                    --user_pass=${USER1_PASSWORD} \
-                    --path='/var/www/html/wordpress';
-
-    wp cache flush --allow-root --path='/var/www/html/wordpress'
-
+                    --user_pass="${USER1_PASSWORD}" \
+                    --path='/var/www/html/wordpress'
+else
+    echo "WordPress already configured."
 fi
 
-exec /usr/sbin/php-fpm7.4 -F -R
+# Final Permissions fix
+chown -R www-data:www-data /var/www/html/wordpress
+chmod -R 755 /var/www/html/wordpress
+
+# START SERVICE (Note: No -R, and correct path)
+echo "Starting PHP-FPM..."
+exec /usr/sbin/php-fpm7.4 -F
