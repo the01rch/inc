@@ -1,7 +1,12 @@
 #!/bin/bash
 
-# Wait for MariaDB to be ready
-sleep 10
+# Attendre que MariaDB soit prête avant de lancer les commandes WP-CLI
+# On utilise mariadb-admin ping au lieu d'une boucle infinie (prohibée par le sujet)
+echo "Waiting for MariaDB..."
+while ! mariadb-admin ping -h"mariadb" --silent; do
+    sleep 1
+done
+echo "MariaDB is up and running!"
 
 set -x
 
@@ -12,14 +17,14 @@ if [ ! -d "/var/www/html/wordpress" ]; then
     wget -q https://fr.wordpress.org/wordpress-6.6-fr_FR.tar.gz 
     tar -xzf wordpress-6.6-fr_FR.tar.gz
     rm wordpress-6.6-fr_FR.tar.gz
-    chown -R www-data:www-data /var/www/html/wordpress
 fi
 
 cd /var/www/html/wordpress
 
 # 2. Configure and Install WordPress
-# Using the exact variable names from your .env file
+# We check for wp-config.php existence to ensure persistence works after reboot 
 if [ ! -f "wp-config.php" ]; then
+    # Create wp-config.php using variables from .env 
     wp config create --allow-root \
                      --dbname="${MYSQL_DATABASE}" \
                      --dbuser="${MYSQL_USER}" \
@@ -27,6 +32,7 @@ if [ ! -f "wp-config.php" ]; then
                      --dbhost=mariadb:3306 \
                      --path='/var/www/html/wordpress'
     
+    # Install WordPress Core
     wp core install --allow-root \
                     --url="${DOMAIN_NAME}" \
                     --title="Inception" \
@@ -35,7 +41,7 @@ if [ ! -f "wp-config.php" ]; then
                     --admin_email="${WP_ADMIN_EMAIL}" \
                     --path='/var/www/html/wordpress'
 
-    # Note: Ensure these USER1 variables exist in your .env or replace them here
+    # Create the second user (Mandatory part: two users required) 
     wp user create --allow-root \
                     "second_user" "second_user@example.com" \
                     --role=author \
@@ -50,7 +56,8 @@ chown -R www-data:www-data /var/www/html/wordpress
 chmod -R 755 /var/www/html/wordpress
 
 # 4. START SERVICE
+# We use 'exec' to replace the shell process with PHP-FPM. 
+# This makes PHP-FPM the PID 1 of the container[cite: 105].
 echo "Starting PHP-FPM..."
-# Ensure /run/php exists for the PID file
 mkdir -p /run/php
 exec /usr/sbin/php-fpm7.4 -F
