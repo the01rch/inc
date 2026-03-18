@@ -28,7 +28,7 @@ services:
       dockerfile: Dockerfile
     depends_on:
       mariadb:
-        condition: service_healthy
+        #condition: service_healthy
     volumes:
       - wordpress_volume:/var/www/html/
     env_file: .env

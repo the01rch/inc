@@ -67,4 +67,7 @@ else
     echo "MariaDB setup finished."
     touch /tmp/mariadb_ready
     exec mysqld_safe
+
+	chown -R www-data:www-data /var/www/html
+	chmod -R 755 /var/www/html
 fi
